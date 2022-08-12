@@ -1,6 +1,7 @@
 package webServer;   
 
 	import java.net.Socket;
+
 import java.io.OutputStream; 
 import java.io.BufferedOutputStream;
 import java.util.StringTokenizer;
@@ -12,6 +13,7 @@ import java.net.ServerSocket;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.util.ArrayList;
 import java.util.Date;
 
 public class HttpServer { 
@@ -19,7 +21,8 @@ public class HttpServer {
 	static final String DEFAULTFILE = "index.html";
 	static final String FILENOTFOUND = "404.html";
 	static final String METHODNOTSUP= "methodNotSupported.html";
-	static final File WEBROOT = new File(".");
+	static final String SCRIPT = "script.js";
+	static final File WEBROOT = new File("WebROOT");
 	static final int PORT = 8080;
 	
 	
@@ -60,35 +63,30 @@ public class HttpServer {
 	
 	public void init() {
 		BufferedOutputStream outPdata = null; 
-		PrintWriter out = null;
-		BufferedReader in = null; 
+		PrintWriter out = null; 
 		try {
 			System.out.println("Connection established with client");
-			in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+			
 			 out = new PrintWriter(client.getOutputStream());
-			String input = in.readLine();
+			
 			// binary data from file 
 			 outPdata = new BufferedOutputStream(client.getOutputStream());
 			//get the request type we only support GET; 
-			System.out.println(input);
-			 StringTokenizer parse  = new StringTokenizer(input);
-			 String method = parse.nextToken().toUpperCase();
-			 String fileReq = parse.nextToken().toUpperCase();
-			 String content = "text/html";
+			
+			ArrayList<String> header = readHeaderMethod();
+			 
+			 String method = header.get(0);
+			 String fileReq = header.get(1);
+			 String content = "";
 			 // if its not a GET or a Head Method 
 			 if(!method.equals("GET") && !method.equals("HEAD")) {
 				 File file  = new File(WEBROOT,FILENOTFOUND);
 				 int len = (int) file.length();
 				 byte[] datafromfile = readData((int) file.length(),file); 
 				 
-				 //http header are very important , says the browser what to do ! 
-				 	out.println("HTTP/1.1 501 Not Implemented");
-					out.println("Server: Java HTTP Server from lmargale : 1.0");
-					out.println("Date: " + new Date());
-					out.println("Content-type: " + content);
-					out.println("Content-length: " + len);
-					out.println();
-					out.flush();
+				 sendHeader(len, content,501,"Not Implemented");
+				 
+				 	
 					
 					
 				 //binary data
@@ -101,9 +99,10 @@ public class HttpServer {
 				if(fileReq.endsWith("/")){
 					fileReq += DEFAULTFILE; 
 				}
-				
 				File file = new File(WEBROOT,fileReq);
+				
 				int len = (int) file.length();
+				
 				String contend = "";
 				
 				if(fileReq.endsWith("html") || fileReq.endsWith("htm")) {
@@ -116,16 +115,9 @@ public class HttpServer {
 				if(method.equals("GET")) {
 					byte[] dataf = readData(len,file);
 					
-					out.println("HTTP/1.1 200 OK");
-					out.println("Server: Java HTTP Server from lmargale : 1.0");
-					out.println("Date: " + new Date());
-					out.println("Content-type: " + contend);
-					out.println("Content-length: " + len);
-					out.println();
+					sendHeader(len, contend, 200, "OK");
 					
 					
-					
-					out.flush();
 					outPdata.write(dataf,0,len);
 					outPdata.flush();
 					
@@ -153,7 +145,7 @@ public class HttpServer {
 		
 		finally{
 			try {
-				in.close();
+				
 				out.close();
 				outPdata.close();
 				client.close();
@@ -169,6 +161,54 @@ public class HttpServer {
 		
 		
 	}
+	// Reads the header from the client in order to get the request Method and the requested File
+	private ArrayList<String> readHeaderMethod() {
+		ArrayList<String> HEADER = new ArrayList<String>();
+		BufferedReader in; 
+		
+		try {
+			in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+			String input = in.readLine();
+			StringTokenizer parse = new StringTokenizer(input);
+			for(int i = 0; i < 2 ; i++) {
+				HEADER.add(parse.nextToken().toUpperCase());
+			}
+			 System.out.println(input);
+			
+		}catch(IOException e ) {
+			e.printStackTrace();
+		}
+		
+		return HEADER; 
+	}
+	
+	
+	private void sendHeader(int len, String contend, int statusCode, String status) {
+		PrintWriter out= null; 
+		
+		try {
+			 out = new PrintWriter(client.getOutputStream());
+			 
+			
+			//HttpHeader gets Send here 
+			out.println("HTTP/1.1 "+ statusCode +" "+ status);
+			out.println("Server: Java HTTP Server from lmargale : 1.0");
+			out.println("Date: " + new Date());
+			out.println("Content-type: " + contend);
+			out.println("Content-length: " + len);
+			out.println();
+			
+			out.flush();
+		}catch(IOException e ) {
+			e.printStackTrace();
+		}finally {
+			
+		}
+
+	
+		
+	}
+	
 	
 	private void fileNotFound(PrintWriter out, OutputStream dataOut) throws IOException {
 		File file = new File(WEBROOT,FILENOTFOUND); 
