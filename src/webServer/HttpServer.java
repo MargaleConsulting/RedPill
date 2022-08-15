@@ -15,9 +15,12 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Set;
 
-public class HttpServer { 
-	private Socket client; 
+public class HttpServer  { 
+	private Socket client;
+	private HashMap<String,File> webroot;
 	static final String DEFAULTFILE = "index.html";
 	static final String FILENOTFOUND = "404.html";
 	static final String METHODNOTSUP= "methodNotSupported.html";
@@ -26,8 +29,11 @@ public class HttpServer {
 	static final int PORT = 8080;
 	
 	
-	public HttpServer(Socket s) {
-		client = s; 
+	public HttpServer(ServerSocket s) throws IOException {
+		getFiles(WEBROOT);
+		
+		init(s);
+		
 		
 	}
 	
@@ -42,11 +48,11 @@ public class HttpServer {
 			
 			while(true) {
 				ServerSocket server = new ServerSocket(PORT);
-				HttpServer h = new HttpServer(server.accept());
+				HttpServer h = new HttpServer(server);
 				
-				h.init();
+				
 				server.close();
-				
+				System.out.println("Server Closed Connection to client");
 			}
 			
 			
@@ -60,11 +66,34 @@ public class HttpServer {
 		
 		
 	}
+	// gets the files within the webroot
+	public void getFiles(File file) {
+		webroot = new HashMap<String,File>();
+		File[] fileArray = file.listFiles();
+		
+		for(File f : fileArray) {
+			if(f.isDirectory()) {
+				getFiles(f);
+				
+			}
+			webroot.put(f.getName().toUpperCase(), f);
+			
+		}
+
+
+	}
 	
-	public void init() {
+	public void init(ServerSocket s) throws IOException {
+		
+		
+		
+		
 		BufferedOutputStream outPdata = null; 
 		PrintWriter out = null; 
 		try {
+			client = s.accept();
+			
+			
 			System.out.println("Connection established with client");
 			
 			 out = new PrintWriter(client.getOutputStream());
@@ -73,12 +102,59 @@ public class HttpServer {
 			 outPdata = new BufferedOutputStream(client.getOutputStream());
 			//get the request type we only support GET; 
 			
-			ArrayList<String> header = readHeaderMethod();
+			ArrayList<String> header = readHeader();
 			 
 			 String method = header.get(0);
 			 String fileReq = header.get(1);
+			 System.out.println(fileReq);
 			 String content = "";
 			 // if its not a GET or a Head Method 
+			 
+			 
+			 switch(method) {
+			 case "GET": 
+				  File file;
+				
+					
+					String contend = "";
+					if(fileReq.equals("/")){
+						contend = "text/html";
+						
+						fileReq += ".html";
+						file = webroot.get("INDEX.HTML");
+						 
+					}else {
+						file = webroot.get(fileReq.toUpperCase().replaceAll("/",""));
+					}
+					 			
+					
+					contend = writeContend(fileReq);
+					
+					
+					
+					System.out.print(contend);
+					
+						int len = (int) file.length();
+						byte[] byteData = readData(len,file);
+						
+						sendHeader(len, contend, 200, "OK");
+						
+						
+						outPdata.write(byteData,0,len);
+						outPdata.flush();
+						
+					
+				 break;
+				 
+			 case "POST":
+				 break;
+				 
+				 
+				 
+			 }
+			 
+			 
+			 
 			 if(!method.equals("GET") && !method.equals("HEAD")) {
 				 File file  = new File(WEBROOT,FILENOTFOUND);
 				 int len = (int) file.length();
@@ -94,47 +170,14 @@ public class HttpServer {
 				 outPdata.flush();
 				 
 				 
-			 }else {
-				 
-				if(fileReq.endsWith("/")){
-					fileReq += DEFAULTFILE; 
-				}
-				File file = new File(WEBROOT,fileReq);
+			 }
 				
-				int len = (int) file.length();
-				
-				String contend = "";
-				
-				if(fileReq.endsWith("html") || fileReq.endsWith("htm")) {
-					contend = "text/html";
-				}else {
-					contend = "text/plain";
-				}
-				
-				System.out.print(contend);
-				if(method.equals("GET")) {
-					byte[] dataf = readData(len,file);
-					
-					sendHeader(len, contend, 200, "OK");
-					
-					
-					outPdata.write(dataf,0,len);
-					outPdata.flush();
-					
-				}
-				
-				
-				 
-			 } 
-			 
 			 
 			
 		}catch(FileNotFoundException e ) {
-			try {
+			
 				fileNotFound(out,outPdata);
-			}catch(IOException io ){
-				io.printStackTrace();
-			}
+			
 			
 			
 		} catch(IOException e ){
@@ -144,13 +187,13 @@ public class HttpServer {
 		
 		
 		finally{
-			try {
+			
 				
 				out.close();
 				outPdata.close();
 				client.close();
-			}catch(IOException e ) {
-				e.printStackTrace();
+			
+				
 			}
 		
 			
@@ -160,9 +203,9 @@ public class HttpServer {
 		}
 		
 		
-	}
+
 	// Reads the header from the client in order to get the request Method and the requested File
-	private ArrayList<String> readHeaderMethod() {
+	private ArrayList<String> readHeader() {
 		ArrayList<String> HEADER = new ArrayList<String>();
 		BufferedReader in; 
 		
@@ -188,7 +231,6 @@ public class HttpServer {
 		
 		try {
 			 out = new PrintWriter(client.getOutputStream());
-			 
 			
 			//HttpHeader gets Send here 
 			out.println("HTTP/1.1 "+ statusCode +" "+ status);
@@ -201,12 +243,7 @@ public class HttpServer {
 			out.flush();
 		}catch(IOException e ) {
 			e.printStackTrace();
-		}finally {
-			
 		}
-
-	
-		
 	}
 	
 	
@@ -253,7 +290,28 @@ public class HttpServer {
 		return data; 
 	}
 	
-	
+	private String writeContend(String contend) {
+		String util ="";
+		if(contend.endsWith(".html")) {
+			
+			util = "text/html";
+		}
+		
+		if(contend.endsWith(".css")) {
+			util = "text/css";
+		}
+		
+		if(contend.endsWith("js")) {
+			System.out.println("jsjsjs");
+			util = "text/script";
+		}
+		
+		
+		
+		
+		
+		return util;
+	}
 	
 	
 
