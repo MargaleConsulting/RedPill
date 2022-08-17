@@ -21,10 +21,10 @@ import java.util.Set;
 public class HttpServer  { 
 	private Socket client;
 	private HashMap<String,File> webroot;
-	static final String DEFAULTFILE = "index.html";
+	
 	static final String FILENOTFOUND = "404.html";
 	static final String METHODNOTSUP= "methodNotSupported.html";
-	static final String SCRIPT = "script.js";
+	
 	static final File WEBROOT = new File("WebROOT");
 	static final int PORT = 8080;
 	
@@ -92,9 +92,10 @@ public class HttpServer  {
 		PrintWriter out = null; 
 		try {
 			client = s.accept();
-			
-			
 			System.out.println("Connection established with client");
+			
+			
+			
 			
 			 out = new PrintWriter(client.getOutputStream());
 			
@@ -126,7 +127,9 @@ public class HttpServer  {
 					}else {
 						file = webroot.get(fileReq.toUpperCase().replaceAll("/",""));
 					}
-					 			
+					if(file == null) {
+						throw new FileNotFoundException() ; 
+					}
 					
 					contend = writeContend(fileReq);
 					
@@ -174,10 +177,7 @@ public class HttpServer  {
 				
 			 
 			
-		}catch(FileNotFoundException e ) {
-			
-				fileNotFound(out,outPdata);
-			
+		
 			
 			
 		} catch(IOException e ){
@@ -289,6 +289,8 @@ public class HttpServer  {
 			
 		return data; 
 	}
+	
+	
 	
 	private String writeContend(String contend) {
 		String util ="";
